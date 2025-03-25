@@ -6,27 +6,15 @@
 #include <algorithm>
 #include <atomic>
 
-class Bakery {
+class AtomicBakery {
 	const int n;
-	bool*  volatile flags;
-	int* volatile  labels;
-	
 	std::atomic<bool>* atomic_flags;
 	std::atomic<int>* atomic_labels;
 
 public:
-	Bakery(int n) : n(n) {
-		flags = new bool[n];
-		labels = new int[n];
-
+	AtomicBakery(int n) : n(n) {
 		atomic_flags = new std::atomic<bool>[n];
 		atomic_labels = new std::atomic<int>[n];
-
-
-		for (int i = 0; i < n; ++i) {
-			flags[i] = false;
-			labels[i] = 0;
-		}
 
 		for (int i = 0; i < n; ++i) {
 			atomic_flags[i].store(false);
@@ -35,22 +23,9 @@ public:
 
 	}
 
-	~Bakery() {
-		delete[] flags;
-		delete[] labels;
+	~AtomicBakery() {
 		delete[] atomic_flags;
 		delete[] atomic_labels;
-	}
-
-	void lock(const int i) {
-		labels[i] = 1 + *std::max_element(labels, labels + n);
-		flags[i] = true;
-		for (int k = 0; k < n; ++k) {
-			if (k == i) continue;
-			while (flags[k] &&
-				(labels[i] > labels[k] || (labels[i] == labels[k] && i > k))) {
-			}
-		}
 	}
 
 	void atomic_lock(const int i) {
@@ -64,24 +39,56 @@ public:
 		}
 	}
 
-	void unlock(const int i) {
-		flags[i] = false;
-	}
-
 	void atomic_unlock(const int i) {
 		atomic_flags[i].store(false);
+	}
+};
+
+class Bakery {
+	const int n;
+	bool* volatile flags;
+	int* volatile  labels;
+public:
+	Bakery(int n) : n(n) {
+		flags = new bool[n];
+		labels = new int[n];
+
+		for (int i = 0; i < n; ++i) {
+			flags[i] = false;
+			labels[i] = 0;
+		}
+
+	}
+
+	~Bakery() {
+		delete[] flags;
+		delete[] labels;
+	}
+
+	void lock(const int i) {
+		labels[i] = 1 + *std::max_element(labels, labels + n);
+		flags[i] = true;
+		for (int k = 0; k < n; ++k) {
+			if (k == i) continue;
+			while (flags[k] &&
+				(labels[i] > labels[k] || (labels[i] == labels[k] && i > k))) {	
+			}
+		}
+	}
+	
+	void unlock(const int i) {
+		flags[i] = false;
 	}
 };
 
 class TestCase {
 	std::mutex mtx;
 	Bakery* bakery;
+	AtomicBakery* atomic_bakery;
 	const int n;
 	const int m;
 	const int t;
 	volatile int s;
-	std::atomic<int> atomic_s;
-	
 	std::vector<std::thread> threads;
 	std::chrono::duration<double> elapsed_time;
 
@@ -89,22 +96,24 @@ public:
 	TestCase(int n, int t, int m) : n(n), t(t / n), m(m) {
 		this->s = 0;
 		bakery = new Bakery(n);
+		atomic_bakery = new AtomicBakery(n);
 		elapsed_time = std::chrono::duration<double>::zero();
 	}
 	~TestCase() {
 		delete bakery;
+		delete atomic_bakery;
 	}
 
 	void thread_function_natural(int i) {
 		for (int j = 0; j < t; ++j) {
-			atomic_s.store(atomic_s.load() + 1);
+			s++;
 		}
 	}
 
 	void thread_function_mutex(int i) {
 		for (int j = 0; j < t; ++j) {
 			mtx.lock();
-			atomic_s.store(atomic_s.load() + 1);
+			s++;
 			mtx.unlock();
 		}
 	}
@@ -112,16 +121,16 @@ public:
 	void thread_function_bakery(int i) {
 		for (int j = 0; j < t; ++j) {
 			bakery->lock(i);
-			atomic_s.store(atomic_s.load() + 1);
+			s++;
 			bakery->unlock(i);
 		}
 	}
 
 	void thread_function_atomic_bakery(int i) {
 		for (int j = 0; j < t; ++j) {
-			bakery->atomic_lock(i);
-			atomic_s.store(atomic_s.load() + 1);
-			bakery->atomic_unlock(i);
+			atomic_bakery->atomic_lock(i);
+			s++;
+			atomic_bakery->atomic_unlock(i);
 		}
 	}
 
@@ -153,7 +162,7 @@ public:
 	}
 
 	void print_result() {
-		std::cout << "Expected: " << n * t << ", Result: " << atomic_s.load() << std::endl;
+		std::cout << n << "Thread " << "Expected: " << n * t << ", Result: " << s << std::endl;
 		std::cout << "Elapsed time: " << elapsed_time.count() << "s" << std::endl;
 	}
 
@@ -164,7 +173,7 @@ public:
 };
 
 int main() {
-	int mConstant = 10000000;
+	const int CONSTANT = 10000000;
 	for (int mode = 0; mode < 4; mode++) {
 		switch (mode)
 		{
@@ -184,7 +193,7 @@ int main() {
 			break;
 		}
 		for (int i = 1; i <= 8; i = i * 2) {
-			TestCase(i, mConstant, mode).result();
+			TestCase(i, CONSTANT, mode).result();
 		}
 	}
 	return 0;
