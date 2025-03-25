@@ -8,13 +8,15 @@
 
 class AtomicBakery {
 	const int n;
-	std::atomic<bool>* atomic_flags;
+	std::atomic_bool* atomic_flags;
 	std::atomic<int>* atomic_labels;
+	std::atomic<int> max_label;
 
 public:
 	AtomicBakery(int n) : n(n) {
-		atomic_flags = new std::atomic<bool>[n];
+		atomic_flags = new std::atomic_bool[n];
 		atomic_labels = new std::atomic<int>[n];
+		max_label = 0;
 
 		for (int i = 0; i < n; ++i) {
 			atomic_flags[i].store(false);
@@ -29,8 +31,8 @@ public:
 	}
 
 	void atomic_lock(const int i) {
-		atomic_labels[i].store(1 + *std::max_element(labels, labels + n));
 		atomic_flags[i].store(true);
+		atomic_labels[i].store(1 + max_label.fetch_add(1));
 		for (int k = 0; k < n; ++k) {
 			if (k == i) continue;
 			while (atomic_flags[k].load() &&
@@ -48,11 +50,13 @@ class Bakery {
 	const int n;
 	bool* volatile flags;
 	int* volatile  labels;
+	volatile int max_label;
+
 public:
 	Bakery(int n) : n(n) {
 		flags = new bool[n];
 		labels = new int[n];
-
+		max_label = 0;
 		for (int i = 0; i < n; ++i) {
 			flags[i] = false;
 			labels[i] = 0;
@@ -66,7 +70,7 @@ public:
 	}
 
 	void lock(const int i) {
-		labels[i] = 1 + *std::max_element(labels, labels + n);
+		labels[i] = 1 + max_label++;
 		flags[i] = true;
 		for (int k = 0; k < n; ++k) {
 			if (k == i) continue;
