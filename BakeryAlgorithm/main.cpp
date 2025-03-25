@@ -97,14 +97,14 @@ public:
 
 	void thread_function_natural(int i) {
 		for (int j = 0; j < t; ++j) {
-			s = s + 1;
+			atomic_s.store(atomic_s.load() + 1);
 		}
 	}
 
 	void thread_function_mutex(int i) {
 		for (int j = 0; j < t; ++j) {
 			mtx.lock();
-			s = s + 1;
+			atomic_s.store(atomic_s.load() + 1);
 			mtx.unlock();
 		}
 	}
@@ -112,7 +112,7 @@ public:
 	void thread_function_bakery(int i) {
 		for (int j = 0; j < t; ++j) {
 			bakery->lock(i);
-			s = s + 1;
+			atomic_s.store(atomic_s.load() + 1);
 			bakery->unlock(i);
 		}
 	}
@@ -153,10 +153,7 @@ public:
 	}
 
 	void print_result() {
-		if (m == 3) 
-			std::cout << "Expected: " << n * t << ", Result: " << atomic_s.load() << std::endl;
-		else
-			std::cout << "Expected: " << n * t << ", Result: " << s << std::endl;
+		std::cout << "Expected: " << n * t << ", Result: " << atomic_s.load() << std::endl;
 		std::cout << "Elapsed time: " << elapsed_time.count() << "s" << std::endl;
 	}
 
