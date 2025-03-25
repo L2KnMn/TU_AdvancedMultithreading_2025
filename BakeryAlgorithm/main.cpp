@@ -3,27 +3,43 @@
 #include <thread>
 #include <chrono>
 #include <mutex>
-
+#include <algorithm>
+#include <atomic>
 
 class Bakery {
 	const int n;
-	bool* volatile flags;
-	int* volatile labels;
+	bool*  volatile flags;
+	int* volatile  labels;
+	
+	std::atomic<bool>* atomic_flags;
+	std::atomic<int>* atomic_labels;
 
 public:
 	Bakery(int n) : n(n) {
 		flags = new bool[n];
 		labels = new int[n];
 
+		atomic_flags = new std::atomic<bool>[n];
+		atomic_labels = new std::atomic<int>[n];
+
+
 		for (int i = 0; i < n; ++i) {
 			flags[i] = false;
 			labels[i] = 0;
 		}
+
+		for (int i = 0; i < n; ++i) {
+			atomic_flags[i].store(false);
+			atomic_labels[i].store(0);
+		}
+
 	}
 
 	~Bakery() {
 		delete[] flags;
 		delete[] labels;
+		delete[] atomic_flags;
+		delete[] atomic_labels;
 	}
 
 	void lock(const int i) {
@@ -37,8 +53,23 @@ public:
 		}
 	}
 
+	void atomic_lock(const int i) {
+		atomic_labels[i].store(1 + *std::max_element(labels, labels + n));
+		atomic_flags[i].store(true);
+		for (int k = 0; k < n; ++k) {
+			if (k == i) continue;
+			while (atomic_flags[k].load() &&
+				(atomic_labels[i].load() > atomic_labels[k].load() || (atomic_labels[i].load() == atomic_labels[k].load() && i > k))) {
+			}
+		}
+	}
+
 	void unlock(const int i) {
 		flags[i] = false;
+	}
+
+	void atomic_unlock(const int i) {
+		atomic_flags[i].store(false);
 	}
 };
 
@@ -49,6 +80,8 @@ class TestCase {
 	const int m;
 	const int t;
 	volatile int s;
+	std::atomic<int> atomic_s;
+	
 	std::vector<std::thread> threads;
 	std::chrono::duration<double> elapsed_time;
 
@@ -84,6 +117,14 @@ public:
 		}
 	}
 
+	void thread_function_atomic_bakery(int i) {
+		for (int j = 0; j < t; ++j) {
+			bakery->atomic_lock(i);
+			atomic_s.store(atomic_s.load() + 1);
+			bakery->atomic_unlock(i);
+		}
+	}
+
 	void run() {
 		std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
 		for (int i = 0; i < n; ++i) {
@@ -98,6 +139,9 @@ public:
 			case 2:
 				threads.emplace_back([this, i] { thread_function_bakery(i); });
 				break;
+			case 3:
+				threads.emplace_back([this, i] { thread_function_atomic_bakery(i); });
+				break;
 			default:
 				break;
 			}
@@ -109,21 +153,10 @@ public:
 	}
 
 	void print_result() {
-		switch (m)
-		{
-		case 0:
-			std::cout << "Natural" << std::endl;
-			break;
-		case 1:
-			std::cout << "Mutex" << std::endl;
-			break;
-		case 2:
-			std::cout << "Bakery" << std::endl;
-			break;
-		default:
-			break;
-		}
-		std::cout << "Expected: " << n * t << ", Result: " << s << std::endl;
+		if (m == 3) 
+			std::cout << "Expected: " << n * t << ", Result: " << atomic_s.load() << std::endl;
+		else
+			std::cout << "Expected: " << n * t << ", Result: " << s << std::endl;
 		std::cout << "Elapsed time: " << elapsed_time.count() << "s" << std::endl;
 	}
 
@@ -135,9 +168,27 @@ public:
 
 int main() {
 	int mConstant = 10000000;
-	for (int mode = 0; mode < 3; mode++)
-		for (int i = 1; i <= 8; i = i * 2)
+	for (int mode = 0; mode < 4; mode++) {
+		switch (mode)
+		{
+		case 0:
+			std::cout << "Natural" << std::endl;
+			break;
+		case 1:
+			std::cout << "Mutex" << std::endl;
+			break;
+		case 2:
+			std::cout << "Bakery" << std::endl;
+			break;
+		case 3:
+			std::cout << "Atomic Bakery" << std::endl;
+			break;
+		default:
+			break;
+		}
+		for (int i = 1; i <= 8; i = i * 2) {
 			TestCase(i, mConstant, mode).result();
-
+		}
+	}
 	return 0;
 }
