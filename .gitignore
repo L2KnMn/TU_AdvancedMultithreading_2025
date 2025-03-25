@@ -1,3 +1,20 @@
+# Visual Studio specific folders
+.vs/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sdf
+*.cachefile
+
+# Build results
+[Bb]in/
+[Oo]ut/
+build/
+x64/
+
+
 # Prerequisites
 *.d
 
