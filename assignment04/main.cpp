@@ -154,6 +154,7 @@ public:
 	{
 		delete head;
 		delete tail;
+		clear();
 	}
 
 	void clear()
