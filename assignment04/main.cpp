@@ -152,9 +152,9 @@ public:
 	}
 	~FLIST()
 	{
+		clear();
 		delete head;
 		delete tail;
-		clear();
 	}
 
 	void clear()
@@ -224,14 +224,17 @@ public:
 	bool Contains(int key)
 	{
 		NODE* pred = head;
+		pred->lock();
 		NODE* curr = pred->next;
+		curr->lock();
 
 		while (curr->key < key) {
+			pred->unlock();
 			pred = curr;
 			curr = curr->next;
+			curr->lock();
 		}
 
-		pred->lock(); curr->lock();
 		if (curr->key == key) {
 			pred->unlock(); curr->unlock();
 			return true;
@@ -241,6 +244,138 @@ public:
 			return false;
 		}
 	}
+
+	void print20()
+	{
+		auto p = head->next;
+
+		for (int i = 0; i < 20; ++i) {
+			if (tail == p) break;
+			std::cout << p->key << ", ";
+			p = p->next;
+		}
+		std::cout << std::endl;
+	}
+};
+
+class OLIST {
+	NODE* head, * tail;
+public:
+	OLIST()
+	{
+		head = new NODE{ std::numeric_limits<int>::min() };
+		tail = new NODE{ std::numeric_limits<int>::max() };
+		head->next = tail;
+	}
+	~OLIST()
+	{
+		clear();
+		delete head;
+		delete tail;
+	}
+
+	void clear()
+	{
+		while (head->next != tail) {
+			auto ptr = head->next;
+			head->next = head->next->next;
+			delete ptr;
+		}
+	}
+
+	bool validate(NODE* pred, NODE* curr)
+	{
+		NODE* n = head;
+		while(n->key <= pred->key) {
+			if (n == pred) {
+				return curr == pred->next;
+			}
+			n = n->next;
+		}
+		return false;
+	}
+
+	bool Add(int key)
+	{
+		while (true) {
+			NODE* pred = head;
+			NODE* curr = pred->next;
+
+			while (curr->key < key) {
+				pred = curr;
+				curr = curr->next;
+			}
+			
+			std::lock_guard<std::mutex> lp(pred->sm);
+			std::lock_guard<std::mutex> lc(curr->sm);
+			if (!validate(pred, curr)) {
+				continue;
+			}
+			if (curr->key == key) {
+				return false;
+			}
+			else {
+				auto n = new NODE{ key };
+				n->next = curr;
+				pred->next = n;
+				return true;
+			}
+		}
+	}
+
+	bool Remove(int key)
+	{
+		while (true) {
+			NODE* pred = head;
+			NODE* curr = pred->next;
+
+			while (curr->key < key) {
+				pred = curr;
+				curr = curr->next;
+			}
+
+			std::lock_guard<std::mutex> lp(pred->sm);
+			std::lock_guard<std::mutex> lc(curr->sm);
+			if (!validate(pred, curr)) {
+				continue;
+			}
+			if (curr->key == key) {
+				auto n = curr;
+				pred->next = n->next;
+				//delete n;
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+	}
+
+	bool Contains(int key)
+	{
+		while (true) {
+			NODE* pred = head;
+			NODE* curr = pred->next;
+
+			while (curr->key < key) {
+				pred = curr;
+				curr = curr->next;
+			}
+
+			std::lock_guard<std::mutex> lp(pred->sm);
+			std::lock_guard<std::mutex> lc(curr->sm);
+			if (!validate(pred, curr)) {
+				continue;
+			}
+			if (curr->key == key) {
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+	}
+
 	void print20()
 	{
 		auto p = head->next;
@@ -257,7 +392,7 @@ public:
 constexpr int NUM_TEST = 4000000;
 constexpr int KEY_RANGE = 1000;
 
-FLIST g_set;
+OLIST g_set;
 
 void benchmark(int num_thread)
 {
