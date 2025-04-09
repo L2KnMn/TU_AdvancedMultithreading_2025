@@ -18,6 +18,113 @@ public:
 	}
 
 	~NODE() {}
+
+
+	void lock()
+	{
+	}
+
+	void unlock()
+	{
+	}
+};
+
+class FLIST {
+	NODE* head;
+	NODE* tail;
+public:
+	FLIST()
+	{
+		head = new NODE{ std::numeric_limits<int>::min() };
+		tail = new NODE{ std::numeric_limits<int>::max() };
+		head->next = tail;
+	}
+
+	~FLIST() {
+		clear();
+		delete head;
+		delete tail;
+	}
+
+	void clear()
+	{
+
+		while (head->next != tail) {
+			auto ptr = head->next;
+			head->next = head->next->next;
+			delete ptr;
+		}
+	}
+	bool Add(int key)
+	{
+		head->lock();
+		NODE* pred = head;
+		NODE* curr = pred->next;
+		curr->lock();
+
+		while (curr->key < key) {
+			pred = curr;
+			curr = curr->next;
+		}
+
+		if (curr->key == key) {
+			return false;
+		}
+		else {
+			auto n = new NODE{ key };
+			n->next = curr;
+			pred->next = n;
+			return true;
+		}
+	}
+	bool Remove(int key)
+	{
+		NODE* pred = head;
+		NODE* curr = pred->next;
+
+		while (curr->key < key) {
+			pred = curr;
+			curr = curr->next;
+		}
+
+		if (curr->key == key) {
+			auto n = curr;
+			pred->next = n->next;
+			delete n;
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	bool Contains(int key)
+	{
+		NODE* pred = head;
+		NODE* curr = pred->next;
+
+		while (curr->key < key) {
+			pred = curr;
+			curr = curr->next;
+		}
+
+		if (curr->key == key) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	void print20()
+	{
+		auto p = head->next;
+
+		for (int i = 0; i < 20; ++i) {
+			if (tail == p) break;
+			std::cout << p->key << ", ";
+			p = p->next;
+		}
+		std::cout << std::endl;
+	}
 };
 
 class CLIST {
@@ -32,22 +139,27 @@ public:
 		tail = new NODE{ std::numeric_limits<int>::max() };
 		head->next = tail;
 	}
-	~CLIST() {}
+	~CLIST() {
+		clear();
+		delete head;
+		delete tail;
+	}
 
 	void clear()
 	{
-		mtx.lock();
+		
 		while (head->next != tail) {
+			mtx.lock();
 			auto ptr = head->next;
 			head->next = head->next->next;
 			delete ptr;
+			mtx.unlock();
 		}
-		mtx.unlock();
 	}
 	bool Add(int key)
 	{
-		mtx.lock();
 		NODE* pred = head;
+		mtx.lock();
 		NODE* curr = pred->next;
 
 		while (curr->key < key) {
@@ -68,8 +180,8 @@ public:
 	}
 	bool Remove(int key)
 	{
-		mtx.lock();
 		NODE* pred = head;
+		mtx.lock();
 		NODE* curr = pred->next;
 
 		while (curr->key < key) {
@@ -80,8 +192,8 @@ public:
 		if (curr->key == key) {
 			auto n = curr;
 			pred->next = n->next;
-			delete n;
 			mtx.unlock();
+			delete n;
 			return true;
 		}
 		else {
@@ -91,8 +203,8 @@ public:
 	}
 	bool Contains(int key)
 	{
-		mtx.lock();
 		NODE* pred = head;
+		mtx.lock();
 		NODE* curr = pred->next;
 
 		while (curr->key < key) {
