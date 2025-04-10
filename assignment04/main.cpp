@@ -10,7 +10,7 @@ public:
 	int key;
 	NODE* next;
 	std::mutex sm;
-	bool mark;
+	volatile bool mark;
 
 	NODE() { 
 		key = 0;
@@ -472,7 +472,6 @@ public:
 	}
 };
 
-
 class LLIST {
 	NODE* head, * tail;
 public:
@@ -519,7 +518,7 @@ public:
 				return false;
 			}
 			else {
-				auto n = new NODE{ key };
+				auto n = new NODE{ key }; 
 				n->next = curr;
 				pred->next = n;
 				return true;
@@ -589,7 +588,7 @@ std::array<std::vector<HISTORY>, 16> history;
 constexpr int NUM_TEST = 4000000;
 constexpr int KEY_RANGE = 1000;
 
-OLIST g_set;
+LLIST g_set;
 
 void check_history(int num_threads)
 {
@@ -632,8 +631,6 @@ void check_history(int num_threads)
 	}
 	std::cout << " OK\n";
 }
-
-
 void benchmark_check(int num_threads, int th_id)
 {
 	for (int i = 0; i < NUM_TEST / num_threads; ++i) {
