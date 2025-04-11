@@ -574,6 +574,135 @@ public:
 	}
 };
 
+class NODE_SP {
+public:
+	int key;
+	std::shared_ptr<NODE_SP> next;
+	std::mutex sm;
+	volatile bool mark;
+
+	NODE_SP(int key_value) {
+		next = nullptr;
+		key = key_value;
+		mark = false;
+	}
+
+	~NODE_SP() {}
+
+	void lock()
+	{
+		sm.lock();
+	}
+
+	void unlock()
+	{
+		sm.unlock();
+	}
+};
+
+class LLIST_SP {
+	std::shared_ptr<NODE_SP> head, tail;
+public:
+	LLIST_SP()
+	{
+		head = std::make_shared<NODE_SP>(std::numeric_limits<int>::min());
+		tail = std::make_shared<NODE_SP>(std::numeric_limits<int>::max());
+		head->next = tail;
+	}
+	~LLIST_SP()
+	{
+	}
+
+	void clear()
+	{
+		while (head->next != tail) {
+			auto ptr = head->next;
+			head->next = head->next->next;
+			//delete ptr;
+		}
+	}
+
+	bool validate(std::shared_ptr<NODE_SP> pred, std::shared_ptr<NODE_SP> curr)
+	{
+		return !pred->mark && !curr->mark && pred->next == curr;
+	}
+
+	bool Add(int key)
+	{
+		std::shared_ptr<NODE_SP> pred = head;
+		std::shared_ptr<NODE_SP> curr = pred->next;
+		while (curr->key < key) {
+			pred = curr;
+			curr = curr->next;
+		}
+
+
+		std::lock_guard <std::mutex> pl{ pred->sm };
+		std::lock_guard <std::mutex> cl{ curr->sm };
+		if (validate(pred, curr)) {
+			if (curr->key == key) {
+				return false;
+			}
+			else {
+				//auto n = new NODE_SP{ key }; 
+				std::shared_ptr<NODE_SP> n;
+				n = std::make_shared<NODE_SP>(key);
+				n->next = curr;
+				pred->next = n;
+				return true;
+			}
+		}
+		return false;
+	}
+	bool Remove(int key)
+	{
+		std::shared_ptr<NODE_SP> pred = head;
+		std::shared_ptr<NODE_SP> curr = pred->next;
+		while (curr->key < key) {
+			pred = curr;
+			curr = curr->next;
+		}
+
+		std::lock_guard <std::mutex> pl{ pred->sm };
+		std::lock_guard <std::mutex> cl{ curr->sm };
+		if (true == validate(pred, curr)) {
+			if (curr->key == key) {
+				auto n = curr;
+				curr->mark = true;
+				pred->next = n->next;
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+		return false;
+	}
+	bool Contains(int key)
+	{
+		std::shared_ptr<NODE_SP> pred = head;
+		std::shared_ptr<NODE_SP> curr = pred->next;
+
+		while (curr->key < key) {
+			pred = curr;
+			curr = curr->next;
+		}
+		return curr->key == key && !curr->mark;
+	}
+	void print20()
+	{
+		auto p = head->next;
+
+		for (int i = 0; i < 20; ++i) {
+			if (tail == p) break;
+			std::cout << p->key << ", ";
+			p = p->next;
+		}
+		std::cout << std::endl;
+	}
+};
+
+
 class HISTORY {
 public:
 	int op;
@@ -588,7 +717,7 @@ std::array<std::vector<HISTORY>, 16> history;
 constexpr int NUM_TEST = 4000000;
 constexpr int KEY_RANGE = 1000;
 
-LLIST g_set;
+LLIST_SP g_set;
 
 void check_history(int num_threads)
 {
