@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <array>
+#include <queue>
 
 class NODE {
 public:
@@ -472,7 +473,6 @@ public:
 	}
 };
 
-
 class LLIST {
 	NODE* head, * tail;
 public:
@@ -570,6 +570,578 @@ public:
 			if (tail == p) break;
 			std::cout << p->key << ", ";
 			p = p->next;
+		}
+		std::cout << std::endl;
+	}
+};
+
+struct NODE_SP {
+	int key;
+	std::shared_ptr<NODE_SP> next{ nullptr };
+	std::mutex sm;
+	volatile bool removed{ false };
+	NODE_SP() : key(-1) {}
+	NODE_SP(int x) : key(x) {}
+	void lock()
+	{
+		sm.lock();
+	}
+	void unlock()
+	{
+		sm.unlock();
+	}
+};
+
+class LLIST_SP {
+	std::shared_ptr<NODE_SP> head, tail;
+public:
+	LLIST_SP()
+	{
+		head = std::make_shared<NODE_SP>(std::numeric_limits<int>::min());
+		tail = std::make_shared<NODE_SP>(std::numeric_limits<int>::max());
+		head->next = tail;
+	}
+	~LLIST_SP()
+	{
+	}
+
+	void clear()
+	{
+		head->next = tail;
+	}
+
+	bool validate(const std::shared_ptr<NODE_SP>& pred, const std::shared_ptr<NODE_SP>& curr)
+	{
+		return (pred->removed == false) && (curr->removed == false)
+			&& (pred->next == curr);
+	}
+
+	bool Add(int key)
+	{
+		while (true) {
+			std::shared_ptr<NODE_SP> pred = head;
+			std::shared_ptr<NODE_SP> curr = pred->next;
+			while (curr->key < key) {
+				pred = curr;
+				curr = curr->next;
+			}
+
+			pred->lock(); curr->lock();
+			if (true == validate(pred, curr)) {
+				if (curr->key == key) {
+					pred->unlock(); curr->unlock();
+					return false;
+				}
+				else {
+					auto n = std::make_shared<NODE_SP>(key);
+					n->next = curr;
+					pred->next = n;
+					pred->unlock(); curr->unlock();
+					return true;
+				}
+			}
+			else {
+				pred->unlock(); curr->unlock();
+			}
+		}
+	}
+	bool Remove(int key)
+	{
+		while (true) {
+			std::shared_ptr<NODE_SP> pred = head;
+			std::shared_ptr<NODE_SP> curr = pred->next;
+			while (curr->key < key) {
+				pred = curr;
+				curr = curr->next;
+			}
+
+			pred->lock(); curr->lock();
+			if (true == validate(pred, curr)) {
+				if (curr->key == key) {
+					auto n = curr;
+					curr->removed = true;
+					pred->next = n->next;
+					pred->unlock(); curr->unlock();
+					//delete n;
+					return true;
+				}
+				else {
+					pred->unlock(); curr->unlock();
+					return false;
+				}
+			}
+			else {
+				pred->unlock(); curr->unlock();
+				continue;
+			}
+		}
+	}
+	bool Contains(int key)
+	{
+		std::shared_ptr<NODE_SP> curr = head;
+		while (curr->key < key) {
+			curr = curr->next;
+		}
+		return (curr->removed == false) && (curr->key == key);
+	}
+	void print20()
+	{
+		auto p = head->next;
+
+		for (int i = 0; i < 20; ++i) {
+			if (tail == p) break;
+			std::cout << p->key << ", ";
+			p = p->next;
+		}
+		std::cout << std::endl;
+	}
+};
+
+struct NODE_ASP20 {
+	int key;
+	std::atomic<std::shared_ptr<NODE_ASP20>> next{ nullptr };
+	std::mutex sm;
+	volatile bool removed{ false };
+	NODE_ASP20() : key(-1) {}
+	NODE_ASP20(int x) : key(x) {}
+	void lock()
+	{
+		sm.lock();
+	}
+	void unlock()
+	{
+		sm.unlock();
+	}
+};
+
+class LLIST_ASP20 {
+	std::shared_ptr<NODE_ASP20> head, tail;
+public:
+	LLIST_ASP20()
+	{
+		head = std::make_shared<NODE_ASP20>(std::numeric_limits<int>::min());
+		tail = std::make_shared<NODE_ASP20>(std::numeric_limits<int>::max());
+		head->next = tail;
+	}
+	~LLIST_ASP20()
+	{
+	}
+
+	void clear()
+	{
+		head->next = tail;
+	}
+
+	bool validate(const std::shared_ptr<NODE_ASP20>& pred, const std::shared_ptr<NODE_ASP20>& curr)
+	{
+		return (pred->removed == false) && (curr->removed == false)
+			&& (pred->next.load() == curr);
+	}
+
+	bool Add(int key)
+	{
+		while (true) {
+			std::shared_ptr<NODE_ASP20> pred = head;
+			std::shared_ptr<NODE_ASP20> curr = pred->next;
+			while (curr->key < key) {
+				pred = curr;
+				curr = curr->next;
+			}
+
+			pred->lock(); curr->lock();
+			if (true == validate(pred, curr)) {
+				if (curr->key == key) {
+					pred->unlock(); curr->unlock();
+					return false;
+				}
+				else {
+					auto n = std::make_shared<NODE_ASP20>(key);
+					n->next = curr;
+					pred->next = n;
+					pred->unlock(); curr->unlock();
+					return true;
+				}
+			}
+			else {
+				pred->unlock(); curr->unlock();
+			}
+		}
+	}
+	bool Remove(int key)
+	{
+		while (true) {
+			std::shared_ptr<NODE_ASP20> pred = head;
+			std::shared_ptr<NODE_ASP20> curr = pred->next;
+			while (curr->key < key) {
+				pred = curr;
+				curr = curr->next;
+			}
+
+			pred->lock(); curr->lock();
+			if (true == validate(pred, curr)) {
+				if (curr->key == key) {
+					curr->removed = true;
+					pred->next = curr->next.load();
+					pred->unlock(); curr->unlock();
+					//delete n;
+					return true;
+				}
+				else {
+					pred->unlock(); curr->unlock();
+					return false;
+				}
+			}
+			else {
+				pred->unlock(); curr->unlock();
+				continue;
+			}
+		}
+	}
+	bool Contains(int key)
+	{
+		std::shared_ptr<NODE_ASP20> curr = head;
+		while (curr->key < key) {
+			curr = curr->next;
+		}
+		return (curr->removed == false) && (curr->key == key);
+	}
+	void print20()
+	{
+		std::shared_ptr<NODE_ASP20> p = head->next;
+
+		for (int i = 0; i < 20; ++i) {
+			if (tail == p) break;
+			std::cout << p->key << ", ";
+			p = p->next;
+		}
+		std::cout << std::endl;
+	}
+};
+
+struct LFNODE;
+
+class AMR
+{
+	std::atomic_llong data;
+public:
+	AMR() : data(0) {}
+	~AMR() {}
+
+	bool get_mark()
+	{
+		return (data & 1) == 1;
+	}
+	LFNODE* get_ptr()
+	{
+		long long temp = data & 0xFFFFFFFFFFFFFFFE;
+		return reinterpret_cast<LFNODE*>(temp);
+	}
+
+	LFNODE* get_ptr(bool* is_removed)
+	{
+		long long temp = data;
+		*is_removed = (temp & 1) == 1;
+		return reinterpret_cast<LFNODE*>(temp & 0xFFFFFFFFFFFFFFFE);
+	}
+	void set_ptr(LFNODE* p)
+	{
+		long long temp = reinterpret_cast<long long>(p);
+		temp = temp & 0xFFFFFFFFFFFFFFFE;
+		data = temp;
+	}
+
+	bool CAS(LFNODE* old_p, LFNODE* new_p, bool old_m, bool new_m)
+	{
+		long long old_value = reinterpret_cast<long long>(old_p);
+		long long new_value = reinterpret_cast<long long>(new_p);
+		if (true == old_m)
+			old_value = old_value | 1;
+		else
+			old_value = old_value & 0xFFFFFFFFFFFFFFFE;
+		if (true == new_m)
+			new_value = new_value | 1;
+		else
+			new_value = new_value & 0xFFFFFFFFFFFFFFFE;
+
+		return std::atomic_compare_exchange_strong(&data, &old_value, new_value);
+	}
+};
+
+struct LFNODE {
+	int key;
+	AMR next;
+	std::atomic<int> ebr_counter = 0;
+	LFNODE() : key(-1) {}
+	LFNODE(int x) : key(x) {}
+};
+
+class LFLIST {
+	LFNODE* head, * tail;
+public:
+	LFLIST()
+	{
+		head = new LFNODE{ std::numeric_limits<int>::min() };
+		tail = new LFNODE{ std::numeric_limits<int>::max() };
+		head->next.set_ptr(tail);
+	}
+	~LFLIST()
+	{
+		delete head;
+		delete tail;
+	}
+
+	void clear()
+	{
+		while (head->next.get_ptr() != tail) {
+			auto ptr = head->next.get_ptr();
+			head->next.set_ptr(head->next.get_ptr()->next.get_ptr());
+			delete ptr;
+		}
+	}
+
+	void Find(LFNODE*& pred, LFNODE*& curr, int x)
+	{
+	retry:
+		pred = head;
+		while (true) {
+			curr = pred->next.get_ptr();
+			bool is_removed = false;
+			LFNODE* succ = curr->next.get_ptr(&is_removed);
+			while (true == is_removed) {
+				if (false == pred->next.CAS(curr, succ, false, false))
+					goto retry;
+				curr = succ;
+				succ = curr->next.get_ptr(&is_removed);
+			}
+			if (curr->key >= x) return;
+			pred = curr;
+			curr = succ;
+		}
+	}
+
+	bool Add(int key)
+	{
+		while (true) {
+			LFNODE* pred = head;
+			LFNODE* curr = pred->next.get_ptr();
+
+			Find(pred, curr, key);
+
+			if (curr->key == key)
+				return false;
+			else {
+				auto n = new LFNODE{ key };
+				n->next.set_ptr(curr);
+				if (true == pred->next.CAS(curr, n, false, false))
+					return true;
+			}
+		}
+	}
+	bool Remove(int key)
+	{
+		while (true) {
+			LFNODE* pred, * curr;
+			Find(pred, curr, key);
+			if (curr->key == key) {
+				LFNODE* succ = curr->next.get_ptr();
+				if (false == curr->next.CAS(succ, succ, false, true))
+					continue;
+				pred->next.CAS(curr, succ, false, false);
+				return true;
+			}
+			else return false;
+		}
+	}
+	bool Contains(int key)
+	{
+		LFNODE* curr = head;
+		while (curr->key < key) {
+			curr = curr->next.get_ptr();
+		}
+		return (curr->next.get_mark() == false) && (curr->key == key);
+	}
+	void print20()
+	{
+		auto p = head->next.get_ptr();
+
+		for (int i = 0; i < 20; ++i) {
+			if (tail == p) break;
+			std::cout << p->key << ", ";
+			p = p->next.get_ptr();
+		}
+		std::cout << std::endl;
+	}
+};
+
+constexpr int CACHE_LINE_PADDING = 16;
+constexpr int MAX_THREADS = 16;
+int num_threads;
+
+std::atomic<int> g_ebr_counter = 0;
+
+thread_local std::queue<LFNODE*> free_list;
+thread_local int thread_id;
+std::atomic_int thread_ebr[MAX_THREADS * 16];
+
+// 스레드 시작 시 epoch 초기화 (main 또는 스레드 함수 시작 부분에서 호출)
+void ebr_thread_initialize(int id) {
+	thread_id = id;
+	// 스레드의 epoch를 비활성 상태(max 값)로 초기화
+	thread_ebr[thread_id * CACHE_LINE_PADDING].store(std::numeric_limits<int>::max(), std::memory_order_relaxed);
+}
+
+// 스레드 연산 시작 시 epoch 등록
+void ebr_enter_critical() {
+	if (thread_id == -1) {
+		// 스레드 ID가 초기화되지 않았으면 오류 처리 또는 예외 발생
+		throw std::runtime_error("EBR thread not initialized");
+	}
+	// 현재 전역 epoch 값을 읽어 스레드 로컬 epoch로 설정 (memory_order_acquire 사용)
+	int current_epoch = g_ebr_counter.load(std::memory_order_acquire);
+	thread_ebr[thread_id * CACHE_LINE_PADDING].store(current_epoch, std::memory_order_release);
+}
+
+// 스레드 연산 종료 시 epoch 해제
+void ebr_exit_critical() {
+	if (thread_id == -1) {
+		throw std::runtime_error("EBR thread not initialized");
+	}
+	// 스레드 로컬 epoch를 비활성 상태(max 값)로 설정
+	thread_ebr[thread_id * CACHE_LINE_PADDING].store(std::numeric_limits<int>::max(), std::memory_order_release);
+}
+
+// 전역 epoch 증가 (주기적으로 또는 필요시 호출)
+void ebr_increment_global_epoch() {
+	g_ebr_counter.fetch_add(1, std::memory_order_relaxed);
+	// 필요하다면, 여기서 free list를 순회하며 실제로 메모리를 해제하는 로직 추가 가능
+	// (모든 스레드가 새 epoch로 넘어갔는지 확인 후)
+}
+
+LFNODE* ebr_new(int x)
+{
+	if (free_list.empty()) return new LFNODE(x);
+
+	LFNODE* p = free_list.front();
+
+	int ebr_counter = p->ebr_counter;
+
+	for (int i = 0; i < num_threads; ++i)
+		if (thread_ebr[i * 16] < ebr_counter) {
+			return new LFNODE(x);
+		}
+	free_list.pop();
+	p->key = x;
+	p->next.set_ptr(nullptr);
+	p->ebr_counter = 0;
+	return p;
+}
+
+void ebr_delete(LFNODE* p)
+{
+	p->ebr_counter.store(g_ebr_counter);
+	free_list.push(p);
+}
+
+class EBR_LFLIST {
+	LFNODE* head, * tail;
+public:
+	EBR_LFLIST()
+	{
+		head = new LFNODE{ std::numeric_limits<int>::min() };
+		tail = new LFNODE{ std::numeric_limits<int>::max() };
+		head->next.set_ptr(tail);
+	}
+	~EBR_LFLIST()
+	{
+		delete head;
+		delete tail;
+	}
+
+	void clear()
+	{
+		while (head->next.get_ptr() != tail) {
+			auto ptr = head->next.get_ptr();
+			head->next.set_ptr(head->next.get_ptr()->next.get_ptr());
+			delete ptr;
+		}
+	}
+
+	void Find(LFNODE*& pred, LFNODE*& curr, int x)
+	{
+	retry:
+		pred = head;
+		while (true) {
+			curr = pred->next.get_ptr();
+			bool is_removed = false;
+			LFNODE* succ = curr->next.get_ptr(&is_removed);
+			while (true == is_removed) {
+				if (false == pred->next.CAS(curr, succ, false, false))
+					goto retry;
+				ebr_delete(curr);
+				curr = succ;
+				succ = curr->next.get_ptr(&is_removed);
+			}
+			if (curr->key >= x) return;
+			pred = curr;
+			curr = succ;
+		}
+	}
+
+	bool Add(int key)
+	{
+		thread_ebr[thread_id * 16] = ++g_ebr_counter;
+		while (true) {
+			LFNODE* pred = head;
+			LFNODE* curr = pred->next.get_ptr();
+
+			Find(pred, curr, key);
+
+			if (curr->key == key) {
+				thread_ebr[thread_id * 16] = std::numeric_limits<int>::max();
+				return false;
+			}
+			else {
+				auto n = ebr_new(key);
+				n->next.set_ptr(curr);
+				if (true == pred->next.CAS(curr, n, false, false)) {
+					thread_ebr[thread_id * 16] = std::numeric_limits<int>::max();
+					return true;
+				}
+			}
+		}
+	}
+	bool Remove(int key)
+	{
+		while (true) {
+			LFNODE* pred, * curr;
+			Find(pred, curr, key);
+			if (curr->key == key) {
+				LFNODE* succ = curr->next.get_ptr();
+				if (false == curr->next.CAS(succ, succ, false, true))
+					continue;
+				if (true == pred->next.CAS(curr, succ, false, false))
+					ebr_delete(curr);
+				return true;
+			}
+			else return false;
+		}
+	}
+	bool Contains(int key)
+	{
+		LFNODE* curr = head;
+		while (curr->key < key) {
+			curr = curr->next.get_ptr();
+		}
+		return (curr->next.get_mark() == false) && (curr->key == key);
+	}
+	void print20()
+	{
+		auto p = head->next.get_ptr();
+
+		for (int i = 0; i < 20; ++i) {
+			if (tail == p) break;
+			std::cout << p->key << ", ";
+			p = p->next.get_ptr();
 		}
 		std::cout << std::endl;
 	}
