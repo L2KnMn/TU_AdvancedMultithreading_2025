@@ -857,7 +857,6 @@ constexpr int CACHE_LINE_PADDING = 16;
 constexpr int MAX_THREADS = 16;
 
 std::atomic_int g_ebr_counter = 0;
-std::atomic<int> thread_count{ 0 };
 
 thread_local std::queue<LFNODE*> free_list;
 thread_local std::queue<NODE*> free_list_lazy;
@@ -866,26 +865,30 @@ thread_local volatile int thread_id;
 std::atomic_int thread_ebr[MAX_THREADS * CACHE_LINE_PADDING];
 int g_num_threads;
 
+std::atomic_int ebr_hit_counter = 0;
+
 LFNODE* ebr_new(int x)
 {
 	if (free_list.empty()) return new LFNODE(x);
 
 	LFNODE* p = free_list.front();
+	free_list.pop();
 
 	int ebr_counter = p->ebr_counter;
 
 	for (int i = 0; i < g_num_threads; ++i)
 		if (thread_ebr[i * 16] < ebr_counter) {
+			// p를 꺼낼 수 있는 타이밍이 아직 아니다 돌려주자
+			free_list.push(p);
 			return new LFNODE(x);
 		}
 
 	if (p->next.CAS(p->next.get_ptr(), nullptr, true, false)) {
-		free_list.pop();
 		p->key = x;
 		p->ebr_counter = 0;
+		ebr_hit_counter.fetch_add(1);
 		return p;
-	}else
-	{	
+	}else {	
 		std::cout << "EBR 경합 있었음\n" << std::endl;
 		return new LFNODE(x);
 	}
@@ -1347,7 +1350,6 @@ int main()
 	// 알고리즘 정확성 검사
 	{
 		for (int i = 1; i <= 16; i = i * 2) {
-			thread_count = 0;
 			g_num_threads = i;
 			g_ebr_counter = 0;
 
@@ -1370,7 +1372,6 @@ int main()
 	}
 	{
 		for (int i = 1; i <= 16; i = i * 2) {
-			thread_count = 0;
 			g_num_threads = i;
 			g_ebr_counter = 0;
 
@@ -1390,4 +1391,5 @@ int main()
 			std::cout << ", Exec time = " << exec_ms << "ms.\n;";
 		}
 	}
+	std::cout << "EBR hit count : " << ebr_hit_counter.load() << std::endl;
 }
