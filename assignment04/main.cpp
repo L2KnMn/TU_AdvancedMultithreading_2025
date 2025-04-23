@@ -12,7 +12,7 @@ public:
 	int key;
 	NODE* next;
 	std::mutex sm;
-	bool mark;
+	volatile bool mark;
 
 	NODE() { 
 		key = 0;
@@ -520,7 +520,7 @@ public:
 				return false;
 			}
 			else {
-				auto n = new NODE{ key };
+				auto n = new NODE{ key }; 
 				n->next = curr;
 				pred->next = n;
 				return true;
@@ -1259,8 +1259,6 @@ void check_history(int num_threads)
 	}
 	std::cout << " OK\n";
 }
-
-
 void benchmark_check(int num_threads, int th_id)
 {
 	ebr_thread_initialize(th_id);
