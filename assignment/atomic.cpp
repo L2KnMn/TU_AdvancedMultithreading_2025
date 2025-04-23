@@ -3,20 +3,30 @@
 #include <atomic>
 #include <chrono>
 
-struct Memory {
-	int value;
-};
+#include <iostream>
+#include <thread>
 
-bool CAS(Memory memory, Memory expected, Memory update) {
-	if (memory.value == expected.value) {
-		memory.value = update.value;
-		return true;
-	}
-	else
-		return false;
+thread_local int thread_id = -1;
+
+void worker(int id) {
+    thread_id = id;
+    std::cout << "Thread " << id << " has thread_id = " << thread_id << std::endl;
+    std::cout << "Thread " << id << " has thread_id = " << thread_id << std::endl;
+    std::cout << "Thread " << id << " has thread_id = " << thread_id << std::endl;
+    std::cout << "Thread " << id << " has thread_id = " << thread_id << std::endl;
+    std::cout << "Thread " << id << " has thread_id = " << thread_id << std::endl;
+    std::cout << "Thread " << id << " has thread_id = " << thread_id << std::endl;
+    std::cout << "Thread " << id << " has thread_id = " << thread_id << std::endl;
+    std::cout << "Thread " << id << " has thread_id = " << thread_id << std::endl;
 }
 
 int main() {
+    std::thread t1(worker, 1);
+    std::thread t2(worker, 2);
 
-	return 0;
+    t1.join();
+    t2.join();
+
+    std::cout << "Main thread's thread_id = " << thread_id << std::endl; // -1
+    return 0;
 }
