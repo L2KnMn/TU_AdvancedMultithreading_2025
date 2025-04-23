@@ -879,11 +879,16 @@ LFNODE* ebr_new(int x)
 			return new LFNODE(x);
 		}
 
-	free_list.pop();
-	p->key = x;
-	p->next.CAS(p->next.get_ptr(), nullptr, true, false);
-	p->ebr_counter = 0;
-	return p;
+	if (p->next.CAS(p->next.get_ptr(), nullptr, true, false)) {
+		free_list.pop();
+		p->key = x;
+		p->ebr_counter = 0;
+		return p;
+	}else
+	{	
+		std::cout << "EBR 경합 있었음\n" << std::endl;
+		return new LFNODE(x);
+	}
 }
 
 std::mutex mtx;
