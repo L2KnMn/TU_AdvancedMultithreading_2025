@@ -854,7 +854,7 @@ public:
 };
 
 constexpr int CACHE_LINE_PADDING = 16;
-constexpr int MAX_THREADS = 16;
+constexpr int MAX_THREADS = 32;
 
 std::atomic_int g_ebr_counter = 0;
 
@@ -1218,13 +1218,13 @@ public:
 	HISTORY(int o, int i, bool re) : op(o), i_value(i), o_value(re) {}
 };
 
-std::array<std::vector<HISTORY>, 16> history;
+std::array<std::vector<HISTORY>, MAX_THREADS> history;
 
 
-constexpr int NUM_TEST = 4000000;
+constexpr int NUM_TEST = 40000;
 constexpr int KEY_RANGE = 1000;
 
-EBR_LFLIST g_set;
+EBR_LLIST g_set;
 
 void check_history(int num_threads)
 {
@@ -1349,7 +1349,7 @@ int main()
 
 	// 알고리즘 정확성 검사
 	{
-		for (int i = 1; i <= 16; i = i * 2) {
+		for (int i = 1; i <= MAX_THREADS; i = i * 2) {
 			g_num_threads = i;
 			g_ebr_counter = 0;
 
@@ -1371,7 +1371,7 @@ int main()
 		}
 	}
 	{
-		for (int i = 1; i <= 16; i = i * 2) {
+		for (int i = 1; i <= MAX_THREADS; i = i * 2) {
 			g_num_threads = i;
 			g_ebr_counter = 0;
 
